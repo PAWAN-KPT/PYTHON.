@@ -1,0 +1,19 @@
+ecommerce/
+├── ecommerce/              # Project settings
+│   ├── settings.py
+│   ├── urls.py
+├── store/                  # Main app
+│   ├── models.py
+│   ├── views.py
+│   ├── urls.py
+│   ├── templates/
+│   │   └── store/
+│   │       ├── index.html
+│   │       ├── product_detail.html
+│   │       ├── cart.html
+│   │       ├── login.html
+│   │       └── register.html
+├── static/                 # CSS, JS, images
+│   ├── css/
+│   └── js/
+└── db.sqlite3
