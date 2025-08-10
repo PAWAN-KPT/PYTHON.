@@ -1,0 +1,196 @@
+# project stracture 
+alpha_tech/
+├── alpha_tech/             # Django settings and root URLs
+│   ├── settings.py
+│   ├── urls.py
+├── social/                 # Main app for social features
+│   ├── models.py
+│   ├── views.py
+│   ├── urls.py
+│   ├── templates/
+│   │   └── social/
+│   │       ├── index.html
+│   │       ├── profile.html
+│   │       ├── post_detail.html
+│   │       ├── login.html
+│   │       └── register.html
+├── static/                 # CSS, JS, images
+│   ├── css/
+│   └── js/
+└── db.sqlite3
+#Features to Implement
+Feature	Description
+User Profiles	Each user has a profile with their info, posts, and follow/followers count
+Posts & Comments	Users can create posts, comment on them
+Likes	Users can like posts
+Follow System	Users can follow/unfollow others
+#Django Setup
+django-admin startproject alpha_tech
+cd alpha_tech
+python manage.py startapp social
+#Add social to INSTALLED_APPS in settings.py
+INSTALLED_APPS = [
+    ...
+    'social',
+]
+#models
+from django.db import models
+from django.contrib.auth.models import User
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bio = models.TextField(blank=True)
+    followers = models.ManyToManyField(User, related_name='following', blank=True)
+
+    def __str__(self):
+        return self.user.username
+
+class Post(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    likes = models.ManyToManyField(User, related_name='liked_posts', blank=True)
+
+    def __str__(self):
+        return f'{self.user.username} - {self.content[:20]}'
+
+class Comment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username} comment'
+#view
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Profile, Post, Comment
+from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+
+def register_view(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password = request.POST['password']
+        user = User.objects.create_user(username=username, password=password)
+        Profile.objects.create(user=user)
+        return redirect('login')
+    return render(request, 'social/register.html')
+
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password = request.POST['password']
+        user = authenticate(request, username=username, password=password)
+        if user:
+            login(request, user)
+            return redirect('index')
+    return render(request, 'social/login.html')
+
+def logout_view(request):
+    logout(request)
+    return redirect('login')
+
+@login_required
+def index(request):
+    posts = Post.objects.all().order_by('-created_at')
+    return render(request, 'social/index.html', {'posts': posts})
+
+@login_required
+def profile(request, username):
+    user = get_object_or_404(User, username=username)
+    profile = user.profile
+    posts = Post.objects.filter(user=user)
+    is_following = request.user in profile.followers.all()
+    return render(request, 'social/profile.html', {
+        'profile_user': user,
+        'profile': profile,
+        'posts': posts,
+        'is_following': is_following
+    })
+
+@login_required
+def follow_toggle(request, username):
+    profile = get_object_or_404(Profile, user__username=username)
+    if request.user in profile.followers.all():
+        profile.followers.remove(request.user)
+    else:
+        profile.followers.add(request.user)
+    return redirect('profile', username=username)
+
+@login_required
+def create_post(request):
+    if request.method == 'POST':
+        content = request.POST['content']
+        Post.objects.create(user=request.user, content=content)
+        return redirect('index')
+
+@login_required
+def like_post(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    if request.user in post.likes.all():
+        post.likes.remove(request.user)
+    else:
+        post.likes.add(request.user)
+    return redirect('index')
+
+@login_required
+def add_comment(request, post_id):
+    if request.method == 'POST':
+        content = request.POST['comment']
+        post = get_object_or_404(Post, id=post_id)
+        Comment.objects.create(post=post, user=request.user, content=content)
+        return redirect('post_detail', post_id=post.id)
+
+@login_required
+def post_detail(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    comments = post.comments.all()
+    return render(request, 'social/post_detail.html', {'post': post, 'comments': comments})
+#URL
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('social.urls')),
+]
+#social
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.index, name='index'),
+    path('register/', views.register_view, name='register'),
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    path('profile/<str:username>/', views.profile, name='profile'),
+    path('follow/<str:username>/', views.follow_toggle, name='follow_toggle'),
+    path('post/create/', views.create_post, name='create_post'),
+    path('post/<int:post_id>/', views.post_detail, name='post_detail'),
+    path('post/<int:post_id>/like/', views.like_post, name='like_post'),
+    path('post/<int:post_id>/comment/', views.add_comment, name='add_comment'),
+]
+#Templates
+<h1>Feed</h1>
+<a href="{% url 'create_post' %}">New Post</a>
+{% for post in posts %}
+  <div>
+    <p><strong>{{ post.user.username }}</strong>: {{ post.content }}</p>
+    <p>Likes: {{ post.likes.count }}</p>
+    <a href="{% url 'like_post' post.id %}">Like</a> |
+    <a href="{% url 'post_detail' post.id %}">Comments</a>
+  </div>
+{% endfor %}
+#Admin & Final Setup
+from django.contrib import admin
+from .models import Profile, Post, Comment
+
+admin.site.register(Profile)
+admin.site.register(Post)
+admin.site.register(Comment)
+#Migrations and server
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
