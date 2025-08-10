@@ -1,0 +1,71 @@
+# Project Structure 
+rtc-app/
+├── server/                     # Backend - Node.js + Express + Socket.IO
+│   ├── server.js
+│   ├── routes/
+│   └── controllers/
+├── client/                     # Frontend
+│   ├── index.html
+│   ├── style.css
+│   ├── script.js
+│   ├── whiteboard.js
+│   └── media.js
+#Feature Breakdown + Implementation
+// Example: Auth Middleware
+const jwt = require('jsonwebtoken');
+
+function authMiddleware(req, res, next) {
+    const token = req.headers['authorization'];
+    if (!token) return res.sendStatus(403);
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+}
+#Video Calling (Multi-user WebRTC)
+// WebRTC setup (client-side)
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+.then(stream => {
+  localVideo.srcObject = stream;
+  // send stream to peers via peer connection
+});
+# screen shareing
+navigator.mediaDevices.getDisplayMedia({ video: true })
+  .then(stream => {
+    const screenTrack = stream.getTracks()[0];
+    peerConnection.addTrack(screenTrack);
+  });
+#Whiteboard
+canvas.addEventListener('mousemove', (e) => {
+  if (drawing) {
+    socket.emit('draw', { x: e.offsetX, y: e.offsetY });
+  }
+});
+
+socket.on('draw', ({ x, y }) => {
+  ctx.lineTo(x, y);
+  ctx.stroke();
+});
+#File Sharing
+const form = new FormData();
+form.append('file', fileInput.files[0]);
+fetch('/upload', {
+  method: 'POST',
+  body: form,
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+#Real-Time Communication 
+// Server (Node.js)
+io.on('connection', socket => {
+  socket.on('join-room', (roomId, userId) => {
+    socket.join(roomId);
+    socket.to(roomId).emit('user-connected', userId);
+
+    socket.on('message', msg => {
+      io.to(roomId).emit('message', msg);
+    });
+  });
+});
